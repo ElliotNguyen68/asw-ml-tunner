@@ -38,8 +38,9 @@ class LightFMRecommenderSpark(BaseRecommenderModel):
         # print(data_pd)
         self.init_dataset(data=data_pd)
         interaction,weight = self.transform_dataset(data=data_pd)
-        self.model.fit(
-            interaction,weight
+        self.model.fit_partial(
+            interactions=interaction,sample_weight=weight,
+            epochs=1
         )
         
     def recommend_for_user(

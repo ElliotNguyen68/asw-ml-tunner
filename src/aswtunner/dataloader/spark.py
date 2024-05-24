@@ -95,7 +95,7 @@ class DataLoaderSparkRecommendOOT(DataLoaderSparkOOT):
         ).sample(self.sample_ratio)
         df_user_common_to_pd = df_user_common.toPandas()
         df_user_common_cache = SparkSession.getActiveSession().createDataFrame(df_user_common_to_pd)
-        self.user_common = df_user_common
+        self.user_common = df_user_common_cache
         train_data = df_train.join(
             df_user_common_cache,
             on=self.user_identity
