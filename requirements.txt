@@ -1,1 +1,4 @@
 optuna==3.6.1
+lightfm==1.17
+pyspark>=3.0.0
+pandas
