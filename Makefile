@@ -2,3 +2,6 @@
 
 build:
 	python setup.py bdist_wheel 
+
+format:
+	black src
