@@ -8,7 +8,7 @@ with open('requirements.txt') as f:
 
 setuptools.setup(
     name="aswtunner",
-    version="0.0.1",
+    version="0.0.2",
     author="loc nguyen tan",
     author_email="Loc.Nguyen.Tan@aswatson.com ",
     description="Wrapper for tunning machine learning model",
