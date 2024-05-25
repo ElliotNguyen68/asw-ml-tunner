@@ -18,6 +18,10 @@ class Tunner(ABC):
         super().__init__()
         self.model = model
         self.dataloader = dataloader
+        study = optuna.create_study(
+            direction="maximize", sampler=optuna.samplers.TPESampler()
+        )
+        self.study = study
 
     def _get_parameter_trial_optuna(self, trial, values_range_dict: Dict):
         dict_param = {}
@@ -79,11 +83,7 @@ class Tunner(ABC):
 
         step_wrapper = partial(self.step, metrics, values_range_dict, weigths)
 
-        study = optuna.create_study(
-            direction="maximize", sampler=optuna.samplers.TPESampler()
-        )
-        self.study = study
-        study.optimize(step_wrapper, n_trials=n_trials)
+        self.study.optimize(step_wrapper, n_trials=n_trials)
 
     def get_param_by_context(self, params: Dict, context: str):
         params_copy = deepcopy(params)
