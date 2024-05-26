@@ -2,7 +2,7 @@ from pyspark.sql import DataFrame as SparkDataFrame, functions as F, Window
 from aswtunner.base.metric import BaseSparkRecommendMetric
 
 
-class MapK(BaseSparkRecommendMetric):
+class MapKSpark(BaseSparkRecommendMetric):
     def evaluate(self, df_recommend: SparkDataFrame, df_groundtruth: SparkDataFrame):
         """
         truth_col:str, list of recommended products
@@ -79,3 +79,36 @@ class MapK(BaseSparkRecommendMetric):
         df_apk_user = df_apk_user.withColumnRenamed("apk", "apk_out")
 
         return df_apk_user.select(F.mean("apk_out").alias("mapk")).collect()[0].mapk
+
+
+class PrecisionAtKSpark(BaseSparkRecommendMetric):
+    def evaluate(self, df_recommend: SparkDataFrame, df_groundtruth: SparkDataFrame):
+        user_common = (
+            df_recommend.select(self.user_identity)
+            .drop_duplicates()
+            .join(
+                df_groundtruth.select(self.user_identity).drop_duplicates(),
+                on=self.user_identity,
+            )
+        )
+
+        df_rec_join_common = df_recommend.join(user_common, on=self.user_identity)
+        df_truth_join_common = df_groundtruth.join(user_common, on=self.user_identity)
+
+        df_rec_join_truth = (
+            df_rec_join_common.join(df_truth_join_common, on=self.user_identity)
+            .withColumn("rec_up_to_k", F.slice(self.rec_col, 1, self.k))
+            .withColumn(
+                "intersect_ground_truth",
+                F.size(F.array_intersect("rec_up_to_k", self.groundtruth_col)),
+            )
+            .withColumn(
+                "precision_at_k", F.col("intersect_ground_truth") / F.lit(self.k)
+            )
+        )
+
+        return (
+            df_rec_join_truth.select(F.mean("precision_at_k").alias("mean_precision_k"))
+            .collect()[0]
+            .mean_precision_k
+        )
