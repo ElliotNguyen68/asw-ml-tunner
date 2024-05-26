@@ -238,8 +238,8 @@ class LightFMRecommenderFeatureSpark(LightFMRecommenderSpark):
         )
         dataset = Dataset()
         dataset.fit(
-            [user_feature[0] for user_feature in self.user_feature],
-            [item_feature[0] for item_feature in self.item_feature],
+            data[self.user_identity].tolist(),
+            data[self.target].tolist(),
             self.user_unique_feature_values,
             self.item_unique_feature_values,
         )
