@@ -181,6 +181,8 @@ class LightFMRecommenderFeatureSpark(LightFMRecommenderSpark):
     item_feature: pd.DataFrame = None
     user_unique_feature_values: List[str] = None
     item_unique_feature_values: List[str] = None
+    feature_col_user: str
+    feature_col_item: str
 
     def _get_unique_value_from_col_array(self, df: DataFrame, column: str):
         df_ = df.withColumn("flat_val", F.explode(column))
@@ -211,11 +213,18 @@ class LightFMRecommenderFeatureSpark(LightFMRecommenderSpark):
         unique_features = self._get_unique_value_from_col_array(
             df=df_feature, column=feature_column
         )
-        df_feature_pd = df_feature.toPandas()
         if target == "user":
-            key = self.user_identity
-        else:
-            key = self.target
+            self.user_feature = df_feature
+            self.user_unique_feature_values = unique_features
+            self.feature_col_user = feature_column
+        elif target == "item":
+            self.item_feature = df_feature
+            self.item_unique_feature_values = unique_features
+            self.feature_col_item = feature_column
+
+    def _transform_to_matrix_csr(
+        self, df_feature_pd: pd.DataFrame, key: str, feature_column: str
+    ):
         feature_lightfm = list(
             zip(
                 df_feature_pd[key],
@@ -224,36 +233,54 @@ class LightFMRecommenderFeatureSpark(LightFMRecommenderSpark):
                 .values.tolist(),
             )
         )
-        if target == "user":
-            self.user_feature = feature_lightfm
-            self.user_unique_feature_values = unique_features
-        elif target == "item":
-            self.item_feature = feature_lightfm
-            self.item_unique_feature_values = unique_features
+        return feature_lightfm
 
-    def init_dataset(self, data: pd.DataFrame):
+    def init_dataset(self, data: DataFrame):
         assert (
             self.item_unique_feature_values is not None
             and self.user_unique_feature_values is not None
         )
+        df_user_feature_common_txn = self.user_feature.join(
+            data.select(self.user_identity).drop_duplicates(),
+            on=self.user_identity,
+            how="right",
+        )
+        df_item_feature_common_txn = self.item_feature.join(
+            data.select(self.target).drop_duplicates(), on=self.target, how="right"
+        )
+
+        self.user_feature_crs = self._transform_to_matrix_csr(
+            df_feature_pd=self._to_pandas(df_user_feature_common_txn),
+            key=self.user_identity,
+            feature_column=self.feature_col_user,
+        )
+        self.item_feature_crs = self._transform_to_matrix_csr(
+            df_feature_pd=self._to_pandas(df_item_feature_common_txn),
+            key=self.target,
+            feature_column=self.feature_col_item,
+        )
+        data_pd = self._to_pandas(data)
+
         dataset = Dataset()
+
         dataset.fit(
-            data[self.user_identity].tolist(),
-            data[self.target].tolist(),
+            data_pd[self.user_identity].tolist(),
+            data_pd[self.target].tolist(),
             self.user_unique_feature_values,
             self.item_unique_feature_values,
         )
         self.dataset = dataset
 
     def fit(self, data: DataFrame, **kwargs):
+        data.cache()
+
+        self.init_dataset(data=data)
         data_pd = self._to_pandas(data)
-        # print(data_pd)
-        self.init_dataset(data=data_pd)
         interaction, weight = self.transform_dataset(data=data_pd)
         self.model.fit(
             interactions=interaction,
             sample_weight=weight,
-            user_features=self.dataset.build_user_features(self.user_feature),
-            item_features=self.dataset.build_item_features(self.item_feature),
+            user_features=self.dataset.build_user_features(self.user_feature_crs),
+            item_features=self.dataset.build_item_features(self.item_feature_crs),
             **kwargs
         )
